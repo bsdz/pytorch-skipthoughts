@@ -11,12 +11,12 @@ import tqdm
 from torch.autograd import Variable
 from torch.nn.parallel import data_parallel
 from torch.nn.utils import clip_grad_norm
-from torchtextutils import Vocabulary
-from torchtextutils import BatchPreprocessor
-from torchtextutils import DirectoryReader
-from torchtextutils import OmissionNoisifier
-from torchtextutils import SwapNoisifier
-from torchtextutils import create_generator_st
+from torchtextutils.vocab import Vocabulary
+from torchtextutils.data import BatchPreprocessor
+from torchtextutils.iterator.files import DirectoryReader
+from torchtextutils.data import OmissionNoisifier
+from torchtextutils.data import SwapNoisifier
+from torchtextutils.data.generator import create_generator_st
 from yaap import ArgParser
 from yaap import path
 from configargparse import YAMLConfigFileParser
@@ -95,6 +95,7 @@ def parse_args():
 
 
 class DataGenerator(object):
+
     def __init__(self, data_paths, vocab, omit_prob, swap_prob, batch_size,
                  max_len, n_before, n_after, predict_self=False,
                  shuffle_files=True, batch_first=True, pin_memory=True,
@@ -150,6 +151,7 @@ class DataGenerator(object):
 
 
 class Trainer(object):
+
     def __init__(self, model, gpu_devices, data_generator, n_epochs,
                  logger, save_dir, save_period, val_period, previews, ckpt_format,
                  batch_first=True):
@@ -251,12 +253,12 @@ class Trainer(object):
         xys_idx = Variable(xys_idx, volatile=volatile)
 
         if self.is_cuda:
-            x = x.cuda(async=True)
-            x_lens = x_lens.cuda(async=True)
-            ys_i = ys_i.cuda(async=True)
-            ys_t = ys_t.cuda(async=True)
-            ys_lens = ys_lens.cuda(async=True)
-            xys_idx = xys_idx.cuda(async=True)
+            x = x.cuda(non_blocking=True)
+            x_lens = x_lens.cuda(non_blocking=True)
+            ys_i = ys_i.cuda(non_blocking=True)
+            ys_t = ys_t.cuda(non_blocking=True)
+            ys_lens = ys_lens.cuda(non_blocking=True)
+            xys_idx = xys_idx.cuda(non_blocking=True)
 
         return x, x_lens, ys_i, ys_t, ys_lens, xys_idx
 
@@ -477,6 +479,7 @@ def count_parameters(model):
 
 
 class DataParallelSkipThoughts(MultiContextSkipThoughts):
+
     def __init__(self, *args, **kwargs):
         super(DataParallelSkipThoughts, self).__init__(*args, **kwargs)
 
@@ -486,6 +489,7 @@ class DataParallelSkipThoughts(MultiContextSkipThoughts):
 
 
 class TrainLogger(object):
+
     def __init__(self):
         self.step = 0
 
@@ -506,6 +510,7 @@ class TrainLogger(object):
 
 
 class TensorboardTrainLogger(TrainLogger):
+
     def __init__(self, log_dir):
         super(TensorboardTrainLogger, self).__init__()
 
@@ -528,6 +533,7 @@ class TensorboardTrainLogger(TrainLogger):
 
 
 class VisdomTrainLogger(TrainLogger):
+
     def __init__(self, viz_pool):
         super(VisdomTrainLogger, self).__init__()
 
@@ -556,6 +562,7 @@ class VisdomTrainLogger(TrainLogger):
 
 
 class DummyTrainLogger(TrainLogger):
+
     def add_loss(self, prefix, **losses):
         pass
 
@@ -613,9 +620,11 @@ def main():
         "number of processes must be larger than or equal to 1."
 
     if args.wordembed_processes > 1:
+
         def embedding_loader(path, word_dim):
             return load_embeddings_mp(path, word_dim,
                                       processes=args.wordembed_processes)
+
     else:
         embedding_loader = load_embeddings
 

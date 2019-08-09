@@ -24,7 +24,7 @@ def init_gru(cell, gain=1):
     # orthogonal initialization of recurrent weights
     for _, hh, _, _ in cell.all_weights:
         for i in range(0, hh.size(0), cell.hidden_size):
-            I.orthogonal(hh[i:i + cell.hidden_size], gain=gain)
+            I.orthogonal_(hh[i:i + cell.hidden_size], gain=gain)
 
 
 def init_lstm(cell, gain=1):
@@ -243,9 +243,9 @@ class MultiContextSkipThoughts(nn.Module):
         return ret
 
     def reset_parameters(self):
-        I.normal(self.embeddings.weight.data, mean=0, std=0.01)
-        I.xavier_normal(self.W_i.weight.data)
-        I.xavier_normal(self.W_o.weight.data)
+        I.normal_(self.embeddings.weight.data, mean=0, std=0.01)
+        I.xavier_normal_(self.W_i.weight.data)
+        I.xavier_normal_(self.W_o.weight.data)
 
         init_rnn_cell(self.encoder)
 

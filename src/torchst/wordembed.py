@@ -5,19 +5,25 @@ import subprocess
 import itertools
 import multiprocessing
 import multiprocessing.pool as mp
+from functools import partial
+import pickle
+from pathlib import Path
 
 import torch
 import torch.nn as nn
 import torch.optim as O
 import torch.nn.functional as F
 from torch.autograd import Variable
-from torchtextutils import Vocabulary
+from torchtextutils.vocab import Vocabulary
 import numpy as np
 import tqdm
 import yaap
+from joblib import Parallel, delayed
+import pandas as pd
 
 
 class FastText(object):
+
     def __init__(self, fasttext_path, model_path):
         self.fasttext_path = fasttext_path
         self.model_path = model_path
@@ -65,9 +71,8 @@ def _mp_initialize(wd):
 
 
 def _mp_process(lines):
-    global word_dim
+    # global word_dim
     ret = {}
-
     for line in lines:
         tokens = line.split()
         word = " ".join(tokens[:-word_dim])
@@ -106,25 +111,19 @@ def chunks(it, n, k):
 
 
 def load_embeddings_mp(path, word_dim, processes=None):
+    path = Path(path)
+    pkl_path = path.with_suffix(".pkl")
+    # https://stackoverflow.com/questions/37793118/load-pretrained-glove-vectors-in-python
+    if pkl_path.exists():
+        with pkl_path.open('rb') as fp:
+            ret = pickle.load(fp)
+    else:
+        df = pd.read_csv(path, sep=" ", quoting=3, header=None, index_col=0)
+        ret = {key: val.values for key, val in df.T.items()}
+        with pkl_path.open('wb') as fp:
+            pickle.dump(ret, fp)
 
-    if processes is None:
-        processes = multiprocessing.cpu_count()
-
-    pool = mp.Pool(processes, initializer=_mp_initialize,
-                   initargs=(word_dim,))
-
-    with open(path, "r") as f:
-        iterator = chunks(f, n=processes,
-                          k=processes * 10000)
-        ret = {}
-        for batches in iterator:
-            results = pool.map_async(_mp_process, batches)
-            results = results.get()
-            results = aggregate_dicts(*results)
-
-            ret.update(results)
-
-        return ret
+    return ret
 
 
 def preinitialize_embeddings(model, vocab, embeddings):
@@ -144,6 +143,7 @@ def load_fasttext_embeddings(words, fasttext_path, model_path):
 
 
 class WordEmbeddingTranslator(nn.Module):
+
     def __init__(self, word_dim):
         super(WordEmbeddingTranslator, self).__init__()
         self.word_dim = word_dim
@@ -159,6 +159,7 @@ class WordEmbeddingTranslator(nn.Module):
 
 
 class WordEmbeddingTranslatorTrainer(object):
+
     def __init__(self, model, data_generator, epochs, loss):
         self.epochs = epochs
         self.model = model
@@ -208,6 +209,7 @@ class WordEmbeddingTranslatorTrainer(object):
 
 
 class WordEmbeddingTranslationGenerator(object):
+
     def __init__(self, src, target, shuffle=True, batch_size=32, pin_memory=True):
         """
         Arguments:
@@ -250,6 +252,7 @@ class WordEmbeddingTranslationGenerator(object):
 
 
 class ModelWordEmbedding(nn.Module):
+
     def __init__(self, vocab, word_dim):
         super(ModelWordEmbedding, self).__init__()
         self.word_dim = word_dim
@@ -362,6 +365,7 @@ def train():
     if args.wordembed_processes == 1:
         embedding_loader = load_embeddings
     else:
+
         def embedding_loader(path, word_dim):
             return load_embeddings_mp(path, word_dim,
                                        processes=args.wordembed_processes)
